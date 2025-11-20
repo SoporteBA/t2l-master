@@ -9,6 +9,9 @@ import pdfplumber
 import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+# CORRECCIÓN 1: Importar Image de PIL
+from PIL import Image 
+
 
 # =========================================================
 # FUNCIONES DE UTILIDAD Y PARSEO
@@ -240,7 +243,8 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
 
     # Generar Informe PDF en buffer
     pdf_buffer = BytesIO()
-    generar_informe_pdf(resumen, pdf_buffer, t_total, logo_path=logo_path)
+    # Usamos la ruta del logo para el informe PDF
+    generar_informe_pdf(resumen, pdf_buffer, t_total, logo_path="imagen.png") 
     pdf_buffer.seek(0)
     informe_pdf_bytes = pdf_buffer.read()
 
@@ -300,26 +304,37 @@ def main_streamlit_app():
     st.set_page_config(
         page_title="Procesador T2L | BA",
         layout="wide",
+        # Eliminamos initial_sidebar_state="collapsed" ya que no es necesario con wide
     )
     
-    # Encabezado con logo
-logo = Image.open("imagen.png")
-st.image(logo, width=500)
-st.markdown(
-             "<h3 style='color:#132136;margin-top:-10px;'>Procesador T2L | PDF → Excel / CSV</h3>",
-            unsafe_allow_html=True
-        )
-        
-        # 3. Subtítulo (pequeño)
-        st.caption("Departamento de Aduanas - Bernardino Abad SL")
-st.divider()
+    # --- ENCABEZADO ALINEADO A LA IZQUIERDA DEL CONTENEDOR ANCHO (Estilo DUA) ---
     
-st.write("Siga los pasos para la extracción, revisión y exportación de partidas T2L.")
+    # CORRECCIÓN 2: El código debe estar indentado dentro de la función
+    
+    # Encabezado con logo
+    try:
+        logo = Image.open("imagen.png")
+        st.image(logo, width=350) # Ajustado a 350px para mejor coincidencia
+    except FileNotFoundError:
+        st.error("No se encontró el archivo de imagen. Asegúrate de que 'imagen.png' esté en la raíz del repositorio.")
 
-# CSS personalizado
-st.markdown("""
+    st.markdown(
+        "<h3 style='color:#132136;margin-top:-10px;'>Procesador T2L | PDF → Excel / CSV</h3>",
+        unsafe_allow_html=True
+    )
+    
+    # Subtítulo (pequeño)
+    st.caption("Departamento de Aduanas - Bernardino Abad SL")
+    
+    # Separador que usa la aplicación DUA
+    st.divider() 
+    
+    st.write("Siga los pasos para la extracción, revisión y exportación de partidas T2L.")
+
+    # CSS personalizado (Lo mantenemos para forzar el primaryColor si config.toml falla)
+    st.markdown("""
 <style>
-.stApp { background-color: #F8FAFD; }
+.stApp { background-color: #F8FAFD; } 
 .stButton>button { background-color: #004C91; color: white; border-radius: 8px; padding: 0.6em 1.2em; font-weight: 600; }
 h1, h2, h3, h4 { color: #004C91; }
 </style>
@@ -368,7 +383,7 @@ h1, h2, h3, h4 { color: #004C91; }
 
         with st.spinner('ñ Procesando T2L, por favor espera...'):
             excel_bytes, informe_pdf_bytes, t_total = procesar_t2l_streamlit(
-                uploaded_files, sumaria, logo_path
+                uploaded_files, sumaria, "imagen.png" # Pasamos la ruta del logo para el informe PDF
             )
 
         if excel_bytes and informe_pdf_bytes:
@@ -446,5 +461,3 @@ h1, h2, h3, h4 { color: #004C91; }
 
 if __name__ == "__main__":
     main_streamlit_app()
-
-
