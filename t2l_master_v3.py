@@ -366,7 +366,7 @@ h1, h2, h3, h4 { color: #004C91; }
         )
     
     # Botón de procesamiento (PASO 1)
-    if st.button("=Á Procesar Archivos T2L", type="primary", use_container_width=True):
+    if st.button("Procesar Archivos T2L", type="primary", use_container_width=True):
         
         # Validaciones
         if not sumaria.isdigit() or len(sumaria) != 11:
@@ -461,4 +461,5 @@ h1, h2, h3, h4 { color: #004C91; }
 
 if __name__ == "__main__":
     main_streamlit_app()
+
 
