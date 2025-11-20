@@ -300,35 +300,31 @@ def main_streamlit_app():
     st.set_page_config(
         page_title="Procesador T2L | BA",
         layout="wide",
-        initial_sidebar_state="collapsed"
     )
     
-    # Intenta localizar el logo
-    logo_path = "imagen.png" 
-    
-    # --- ENCABEZADO ALINEADO A LA IZQUIERDA DEL CONTENEDOR ANCHO (Estilo DUA) ---
-    
-    # Nota: El estilo de color de fondo gris de la aplicación DUA
-    # debe ser configurado en el archivo .streamlit/config.toml, no en Python.
-    
-    if os.path.exists(logo_path):
-        # 1. Logo (Ajuste de ancho para coincidir con la escala del DUA)
-        st.image(logo_path, width=350) 
-            
-        # 2. Título principal: Negrita y tamaño grande (replicando el estilo DUA)
-        st.markdown(
+    # Encabezado con logo
+logo = Image.open("imagen.png")
+st.image(logo, width=500)
+st.markdown(
              "<h3 style='color:#132136;margin-top:-10px;'>Procesador T2L | PDF → Excel / CSV</h3>",
             unsafe_allow_html=True
         )
         
         # 3. Subtítulo (pequeño)
-        st.markdown(
-            f"<p style='color: #444444; font-size: 0.9em;'>Departamento de Procesos - Bernardino Abad SL</p>",
-            unsafe_allow_html=True
-        )
+        st.caption("Departamento de Aduanas - Bernardino Abad SL")
+st.divider()
     
-    st.markdown("Siga los pasos para la extracción, revisión y exportación de partidas T2L.")
-    st.markdown("---")
+st.write("Siga los pasos para la extracción, revisión y exportación de partidas T2L.")
+
+# CSS personalizado
+st.markdown("""
+<style>
+.stApp { background-color: #F8FAFD; }
+.stButton>button { background-color: #004C91; color: white; border-radius: 8px; padding: 0.6em 1.2em; font-weight: 600; }
+h1, h2, h3, h4 { color: #004C91; }
+</style>
+""", unsafe_allow_html=True)
+
     
     # Estado de la sesión para manejar los pasos
     if 'excel_bytes' not in st.session_state:
@@ -450,4 +446,5 @@ def main_streamlit_app():
 
 if __name__ == "__main__":
     main_streamlit_app()
+
 
