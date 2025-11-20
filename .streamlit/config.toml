@@ -1,0 +1,22 @@
+[theme]
+# Color principal (botones, acentos) - Un verde oscuro corporativo
+primaryColor = "#1B5E20"
+
+# Color de fondo general de la aplicación
+backgroundColor = "#F0F2F6"
+
+# Color de fondo secundario (barra lateral, algunos widgets)
+secondaryBackgroundColor = "#FFFFFF"
+
+# Color del texto principal
+textColor = "#262730"
+
+# Fuente de la aplicación (opcional, deja vacío para la fuente por defecto)
+# font = "sans serif" 
+
+[global]
+# Indica el modo de tema general, útil si no se usan todos los colores
+# Aunque no es estrictamente necesario si defines todos los colores, 
+# ayuda a asegurar la coherencia del modo CLARO.
+# El tema "light" es el que mejor se adapta a la paleta elegida.
+defaultTheme = "light"
