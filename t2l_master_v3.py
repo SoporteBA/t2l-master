@@ -102,7 +102,6 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
 
     c.setFont("Helvetica", 11)
     for cont, total in resumen.items():
-        # LÍNEA CORREGIDA: Uso de f-string sin errores de sintaxis
         c.drawString(40, y, f"ñ {cont}   Total partidas: {total}") 
         y -= 18
         if y < 80:
@@ -296,7 +295,7 @@ def generar_zip_csv(uploaded_excel_file):
 def main_streamlit_app():
     # Configuración de la página
     st.set_page_config(
-        page_title="Procesador T2L | BA",
+        page_title="=ó Procesador T2L | BA",
         layout="centered",
         initial_sidebar_state="collapsed"
     )
@@ -304,17 +303,16 @@ def main_streamlit_app():
     # Intenta localizar el logo
     logo_path = "imagen.png" 
     
-    # --- ENCABEZADO ALINEADO A LA IZQUIERDA DEL CONTENEDOR CENTRAL ---
-    
-    # El contenido se alinea a la izquierda por defecto cuando no usamos st.columns
+    # --- ENCABEZADO ALINEADO A LA IZQUIERDA DEL CONTENEDOR CENTRAL (Estilo DUA) ---
     
     if os.path.exists(logo_path):
-        # 1. Logo
-        st.image(logo_path, width=280) 
+        # 1. Logo (Alineado a la izquierda por defecto)
+        # Ajustamos el ancho para que coincida con la imagen de referencia.
+        st.image(logo_path, width=300) 
             
-        # 2. Título principal (Usamos st.markdown con <h2> para mantener el tamaño y estilo)
+        # 2. Título principal: Negrita y tamaño grande (replicando la estructura del <h1> del DUA)
         st.markdown(
-            f"<h2>Procesador T2L | PDF → Excel / CSV</h2>",
+            f"<h1 style='font-size: 2em; font-weight: bold; margin-top: -10px;'>Procesador T2L | PDF → Excel / CSV</h1>",
             unsafe_allow_html=True
         )
         
@@ -324,9 +322,7 @@ def main_streamlit_app():
             unsafe_allow_html=True
         )
     
-    #st.markdown("---") # Si se incluye esta línea, aparecerá la línea divisoria.
-    
-    st.markdown("A continuación, sigue los pasos para la extracción, revisión y exportación de partidas T2L.")
+    st.markdown("Siga los pasos para la extracción, revisión y exportación de partidas T2L.")
     st.markdown("---")
     
     # Estado de la sesión para manejar los pasos
@@ -354,7 +350,7 @@ def main_streamlit_app():
         )
     
     # Botón de procesamiento (PASO 1)
-    if st.button("Procesar Archivos T2L", type="primary", use_container_width=True):
+    if st.button("=Á Procesar Archivos T2L", type="primary", use_container_width=True):
         
         # Validaciones
         if not sumaria.isdigit() or len(sumaria) != 11:
@@ -449,6 +445,3 @@ def main_streamlit_app():
 
 if __name__ == "__main__":
     main_streamlit_app()
-
-
-
