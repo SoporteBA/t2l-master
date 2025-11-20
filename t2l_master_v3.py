@@ -1,0 +1,457 @@
+import os
+import re
+import time
+import zipfile
+from io import BytesIO
+
+import streamlit as st
+import pdfplumber
+import pandas as pd
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+
+# Nota: Se han eliminado las dependencias de customtkinter/tkinter, 
+# subprocess y filedialog, ya que son reemplazadas por Streamlit.
+
+# =========================================================
+# FUNCIONES DE UTILIDAD (ADAPTACIONES MÍNIMAS)
+# =========================================================
+
+# ---------------------------------------------------------
+# EXTRAER TEXTO DEL PDF (ADAPTADA: Usa objeto en memoria)
+# ---------------------------------------------------------
+def extract_text(uploaded_file_object):
+    """Extrae texto de un objeto de archivo cargado por Streamlit (en memoria)."""
+    text = ""
+    # pdfplumber puede abrir el objeto de archivo de Streamlit directamente
+    with pdfplumber.open(uploaded_file_object) as pdf:
+        for p in pdf.pages:
+            t = p.extract_text()
+            if t:
+                text += t + "\n"
+    return text
+
+# ---------------------------------------------------------
+# PARSEAR BULTOS + KILOS (LÓGICA ORIGINAL)
+# ---------------------------------------------------------
+def parse_t2l(text):
+    """Extrae bultos y kilos del texto del T2L (lógica original intacta)."""
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    results = []
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+
+        if "Number of Packages" in line:
+            # BULTOS
+            m_pkg = re.search(r"(\d+)", line)
+            bultos = m_pkg.group(1) if m_pkg else ""
+
+            # KILOS (línea siguiente a la que contiene "Gross Mass (kg)")
+            kilos = ""
+            for j in range(i, min(i + 20, len(lines))):
+                if "Gross Mass" in lines[j]:
+                    if j + 1 < len(lines):
+                        raw = lines[j + 1].strip()
+                        m_g = re.search(r"([0-9.,]+)", raw)
+                        if m_g:
+                            v = m_g.group(1).replace(",", ".")
+                            try:
+                                f = float(v)
+                                if f.is_integer():
+                                    kilos = str(int(f)).replace(".", ",")
+                                else:
+                                    kilos = str(f).replace(".", ",")
+                            except:
+                                kilos = ""
+                    break
+
+            results.append((bultos, kilos))
+
+        i += 1
+
+    return results
+
+# ---------------------------------------------------------
+# GENERAR INFORME PDF (ADAPTADA: Usa buffer de BytesIO)
+# ---------------------------------------------------------
+def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
+    """Genera el informe PDF escribiendo directamente a un buffer de BytesIO."""
+    c = canvas.Canvas(pdf_buffer, pagesize=A4)
+    width, height = A4
+    y = height - 50
+
+    # Logo
+    if logo_path and os.path.exists(logo_path):
+        try:
+            # Si el logo se sube al repo de Streamlit, será accesible aquí.
+            c.drawImage(logo_path, 40, y - 40, width=160, height=40, preserveAspectRatio=True, mask='auto')
+        except:
+            pass # Ignorar si no se puede cargar el logo
+
+    y -= 70
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, y, "INFORME PROCESAMIENTO T2L")
+    y -= 25
+
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"ñ Tiempo total de procesamiento: {tiempo_total:.2f} segundos")
+    y -= 20
+    c.drawString(40, y, "© Departamento de Procesos | Bernardino Abad   Edition 2025")
+    y -= 30
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "Detalle por contenedor:")
+    y -= 20
+
+    c.setFont("Helvetica", 11)
+    for cont, total in resumen.items():
+        c.drawString(40, y, f"" {cont}   Total partidas: {total}")
+        y -= 18
+        if y < 80:
+            c.showPage()
+            y = height - 80
+            c.setFont("Helvetica", 11)
+
+    y -= 10
+    if y < 80:
+        c.showPage()
+        y = height - 80
+
+    c.setFont("Helvetica-Oblique", 10)
+    c.drawString(40, 60, "Firmado: Sistema Automatizado Departamento de Procesos | BA = ")
+    c.save()
+
+# ---------------------------------------------------------
+# LIMPIEZA PARA CSV (Lógica original)
+# ---------------------------------------------------------
+def clean_int_str(x):
+    """Limpia valores numéricos para exportación como enteros (ej: '1.0' -> '1')."""
+    if x is None:
+        return ""
+    s = str(x).strip()
+    if s == "":
+        return ""
+    if s.endswith(".0"):
+        s = s[:-2]
+    return s
+
+def clean_kilos_str(x):
+    """Limpia y formatea los kilos (ej: '1,234.56' -> '1234.56' -> '1234,56')."""
+    if x is None:
+        return ""
+    s = str(x).strip()
+    if s == "":
+        return ""
+    s = s.replace(" ", "").replace(",", ".")
+    try:
+        v = float(s)
+        if v.is_integer():
+            return str(int(v))
+        else:
+            return str(v).replace(".", ",")
+    except:
+        return ""
+
+# =========================================================
+# FUNCIONES DE PROCESAMIENTO CENTRAL
+# =========================================================
+
+# ---------------------------------------------------------
+# PROCESAR ARCHIVOS T2L Y GENERAR EXCEL/PDF (ADAPTADA)
+# ---------------------------------------------------------
+def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
+    """
+    Procesa los objetos de archivos PDF cargados y genera el Excel y el Informe
+    PDF en buffers de BytesIO.
+    """
+    excel_output = BytesIO()
+    writer = pd.ExcelWriter(excel_output, engine="openpyxl")
+
+    resumen = {}
+    t_inicio = time.time()
+
+    for pdf_file_obj in uploaded_files:
+        pdf_filename = pdf_file_obj.name # Nombre original para la hoja
+        
+        # Contenedor desde nombre de archivo
+        m_cont = re.search(r"([A-Z]{4}\d{6})", pdf_filename)
+        cont = m_cont.group(1) if m_cont else "SINCONT"
+
+        text = extract_text(pdf_file_obj)
+        rows_raw = parse_t2l(text)
+
+        final_rows = []
+        sec = 1
+        for b, k in rows_raw:
+            final_rows.append({
+                "Bultos": b,
+                "Kilos": k,
+                "Fijo_col3": 1,
+                "Fijo_col4": "RECEPCION T2L",
+                "Vacio5": "",
+                "Vacio6": "",
+                "Fijo_col7": "3401110000",
+                "Fijo_col8": 1,
+                "Contenedor": cont,
+                "Fijo_col10": "ES",
+                "Vacio11": "",
+                "Sumaria": sumaria,
+                "Orden": sec
+            })
+            sec += 1
+
+        if not final_rows:
+            df = pd.DataFrame([{
+                "Bultos": "",
+                "Kilos": "",
+                "Fijo_col3": "",
+                "Fijo_col4": "SIN PARTIDAS",
+                "Vacio5": "",
+                "Vacio6": "",
+                "Fijo_col7": "",
+                "Fijo_col8": "",
+                "Contenedor": cont,
+                "Fijo_col10": "",
+                "Vacio11": "",
+                "Sumaria": sumaria,
+                "Orden": ""
+            }])
+            resumen[cont] = 0
+        else:
+            df = pd.DataFrame(final_rows)
+
+            # Sumatorios (Lógica original de tu código)
+            try:
+                total_bultos = sum(int(b or "0") for b, _ in rows_raw)
+            except:
+                total_bultos = ""
+
+            try:
+                total_kilos_val = sum(
+                    float((k or "0").replace(",", "."))
+                    for _, k in rows_raw
+                )
+                if total_kilos_val.is_integer():
+                    total_kilos = str(int(total_kilos_val)).replace(".", ",")
+                else:
+                    total_kilos = str(total_kilos_val).replace(".", ",")
+            except:
+                total_kilos = ""
+
+            df.loc[len(df)] = [
+                total_bultos,
+                total_kilos,
+                "",
+                "TOTAL",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+            ]
+
+            resumen[cont] = len(rows_raw)
+
+        # Escribir al buffer de Excel
+        df.to_excel(writer, sheet_name=pdf_filename[:31], index=False)
+
+    writer.close()
+    excel_output.seek(0)
+    excel_bytes = excel_output.read()
+
+    t_total = time.time() - t_inicio
+
+    # Generar Informe PDF en buffer
+    pdf_buffer = BytesIO()
+    generar_informe_pdf(resumen, pdf_buffer, t_total, logo_path=logo_path)
+    pdf_buffer.seek(0)
+    informe_pdf_bytes = pdf_buffer.read()
+
+    return excel_bytes, informe_pdf_bytes, t_total
+
+# ---------------------------------------------------------
+# GENERAR CSVs DESDE EXCEL Y COMPRIMIR EN ZIP (NUEVA FUNCIÓN)
+# ---------------------------------------------------------
+def generar_zip_csv(uploaded_excel_file):
+    """Lee el Excel revisado (en memoria), genera los CSVs y los comprime en un ZIP (BytesIO)."""
+    
+    excel = pd.ExcelFile(uploaded_excel_file)
+    zip_buffer = BytesIO()
+    csv_count = 0
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        
+        for sheet in excel.sheet_names:
+            df = pd.read_excel(excel, sheet_name=sheet, dtype=str)
+
+            if df.empty:
+                continue
+
+            # quitar última fila (TOTAL) - Revisamos si tiene más de 1 fila y si la última contiene "TOTAL"
+            if len(df) > 1 and df.iloc[-1].astype(str).str.contains('TOTAL', na=False).any():
+                df = df.iloc[:-1].copy()
+            else:
+                df = df.copy()
+
+            # limpiar columnas numéricas
+            for col in ["Bultos", "Fijo_col3", "Fijo_col7", "Fijo_col8", "Sumaria", "Orden"]:
+                if col in df.columns:
+                    df[col] = df[col].map(clean_int_str)
+
+            if "Kilos" in df.columns:
+                df["Kilos"] = df["Kilos"].map(clean_kilos_str)
+
+            # Generar el CSV en un buffer de BytesIO
+            csv_buffer = BytesIO()
+            df.to_csv(csv_buffer, sep=";", header=False, index=False, encoding="utf-8")
+            csv_buffer.seek(0)
+            
+            # Escribir el buffer CSV al archivo ZIP
+            zf.writestr(f"{sheet}.csv", csv_buffer.read())
+            csv_count += 1
+            
+    zip_buffer.seek(0)
+    return zip_buffer, csv_count
+
+
+# =========================================================
+# INTERFAZ DE STREAMLIT
+# =========================================================
+def main_streamlit_app():
+    # Configuración de la página
+    st.set_page_config(
+        page_title="=ó Procesador T2L | BA",
+        layout="centered",
+        initial_sidebar_state="collapsed"
+    )
+
+    st.title("=ó Procesador T2L")
+    st.markdown("© Departamento de Procesos | Bernardino Abad Edition 2025")
+    st.markdown("---")
+    
+    # Intenta localizar el logo (asumiendo que está subido al repo)
+    logo_path = "imagen.png" 
+    if os.path.exists(logo_path):
+        st.image(logo_path, width=200)
+
+    # --- 1. Cargar Archivos T2L y Sumaria ---
+    st.subheader("1. Cargar PDFs T2L y Nº de Sumaria")
+    
+    # Input para la Sumaria
+    sumaria = st.text_input("Introduce Nº de Sumaria (11 dígitos):", max_chars=11, key="sumaria_input")
+    
+    # Carga de múltiples archivos PDF
+    uploaded_files = st.file_uploader(
+        "Sube todos los **PDFs T2L**",
+        type=["pdf"],
+        accept_multiple_files=True
+    )
+    
+    # Estado de la sesión para manejar los pasos
+    if 'excel_bytes' not in st.session_state:
+        st.session_state.excel_bytes = None
+        st.session_state.informe_pdf_bytes = None
+        st.session_state.t_total = None
+
+    # Botón de procesamiento (PASO 1)
+    if st.button("=Á Procesar Archivos T2L", type="primary", use_container_width=True):
+        
+        # Validaciones
+        if not sumaria.isdigit() or len(sumaria) != 11:
+            st.error("El Nº de Sumaria debe tener exactamente 11 dígitos numéricos.")
+            return
+        if not uploaded_files:
+            st.warning("Por favor, sube los archivos PDF a procesar.")
+            return
+
+        # Limpiamos el estado previo
+        st.session_state.excel_bytes = None
+        st.session_state.informe_pdf_bytes = None
+        st.session_state.t_total = None
+
+        with st.spinner('ñ Procesando T2L, por favor espera...'):
+            excel_bytes, informe_pdf_bytes, t_total = procesar_t2l_streamlit(
+                uploaded_files, sumaria, logo_path
+            )
+
+        if excel_bytes and informe_pdf_bytes:
+            st.session_state.excel_bytes = excel_bytes
+            st.session_state.informe_pdf_bytes = informe_pdf_bytes
+            st.session_state.t_total = t_total
+            st.success(f"✅ Archivos base generados. Tiempo total: **{t_total:.2f}** s")
+        else:
+            st.error("L No se pudo procesar la carpeta seleccionada.")
+
+
+    # --- 2. Revisar y Ajustar Excel (Paso 2) ---
+    if st.session_state.excel_bytes:
+        st.markdown("---")
+        st.subheader("2. Descargar y Revisar Excel Base")
+        st.info("Descarga el Excel de trabajo, revisa y ajusta los datos, **guárdalo** y vuelve para subirlo.")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.download_button(
+                label="⬇️ Descargar Excel base (T2L_RESULTADO.xlsx)",
+                data=st.session_state.excel_bytes,
+                file_name="T2L_RESULTADO.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                help="Excel con todas las partidas extraídas."
+            )
+        with col2:
+            st.download_button(
+                label="⬇️ Descargar Informe PDF",
+                data=st.session_state.informe_pdf_bytes,
+                file_name="INFORME_T2L.pdf",
+                mime="application/pdf",
+                help=f"Informe de proceso ({st.session_state.t_total:.2f} s)."
+            )
+        
+        # --- 3. Cargar Excel Revisado y Generar CSVs (Paso 3) ---
+        st.markdown("---")
+        st.subheader("3. Subir Excel Revisado y Generar CSVs")
+        
+        revised_excel = st.file_uploader(
+            "Sube aquí el **Excel revisado** (el mismo archivo después de tus cambios)",
+            type=["xlsx", "xls"],
+            key="revised_excel_uploader"
+        )
+        
+        if revised_excel:
+            if st.button("🎉 Generar Archivo ZIP con CSVs", type="secondary", use_container_width=True):
+                with st.spinner('ñ Generando ficheros CSV y comprimiendo en ZIP...'):
+                    
+                    zip_buffer, csv_count = generar_zip_csv(revised_excel)
+                    
+                    if csv_count > 0:
+                        st.session_state.zip_bytes = zip_buffer.read()
+                        st.session_state.csv_count = csv_count
+                        st.success(f"✅ Proceso Completado. Se generaron {csv_count} ficheros CSV.")
+                    else:
+                        st.error("No se pudieron generar CSVs. Verifica el formato del Excel revisado.")
+
+        
+    # --- 4. Descargar Resultado Final (Paso Final) ---
+    if 'zip_bytes' in st.session_state and st.session_state.zip_bytes:
+        st.markdown("---")
+        st.subheader("4. Descargar Archivo Final")
+        
+        st.download_button(
+            label=f"=Á Descargar {st.session_state.csv_count} CSVs (Archivo ZIP)",
+            data=st.session_state.zip_bytes,
+            file_name="CSV_T2L_FINAL.zip",
+            mime="application/zip",
+            help="Contiene todos los archivos CSV listos para el sistema.",
+            type="primary"
+        )
+        st.info("Proceso terminado. Puedes empezar un nuevo proceso recargando la página o cambiando los inputs.")
+
+if __name__ == "__main__":
+    main_streamlit_app()
