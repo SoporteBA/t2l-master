@@ -107,7 +107,7 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
 
     c.setFont("Helvetica", 11)
     for cont, total in resumen.items():
-        c.drawString(40, y, f"" {cont}   Total partidas: {total}")
+        c.drawString(40, y, f" {cont}   Total partidas: {total}")
         y -= 18
         if y < 80:
             c.showPage()
@@ -454,4 +454,5 @@ def main_streamlit_app():
         st.info("Proceso terminado. Puedes empezar un nuevo proceso recargando la página o cambiando los inputs.")
 
 if __name__ == "__main__":
+
     main_streamlit_app()
