@@ -102,7 +102,7 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
 
     c.setFont("Helvetica", 11)
     for cont, total in resumen.items():
-        # LÍNEA CORREGIDA: Eliminada la comilla doble extra
+        # LÍNEA CORREGIDA: Uso de f-string sin errores de sintaxis
         c.drawString(40, y, f"ñ {cont}   Total partidas: {total}") 
         y -= 18
         if y < 80:
@@ -291,10 +291,10 @@ def generar_zip_csv(uploaded_excel_file):
 
 
 # =========================================================
-# INTERFAZ DE STREAMLIT (ADAPTADA ESTÉTICAMENTE)
+# INTERFAZ DE STREAMLIT (ADAPTADA ESTÉTICAMENTE A DUA)
 # =========================================================
 def main_streamlit_app():
-    # Configuración de la página (Favicon y colores en .streamlit/config.toml)
+    # Configuración de la página
     st.set_page_config(
         page_title="=ó Procesador T2L | BA",
         layout="centered",
@@ -304,29 +304,27 @@ def main_streamlit_app():
     # Intenta localizar el logo
     logo_path = "imagen.png" 
     
-    # --- CENTRADO DEL LOGO y TÍTULOS (Replicando la estructura de Vuelco Magnus) ---
+    # --- ENCABEZADO ALINEADO A LA IZQUIERDA DEL CONTENEDOR CENTRAL ---
     
-    # Usamos tres columnas para centrar el logo y el texto
-    col_left, col_center, col_right = st.columns([1, 4, 1])
-
+    # El contenido se alinea a la izquierda por defecto cuando no usamos st.columns
+    
     if os.path.exists(logo_path):
-        with col_center:
-            # Logo
-            st.image(logo_path, width=280) 
+        # 1. Logo
+        st.image(logo_path, width=280) 
             
-            # Título principal centrado con HTML/CSS
-            st.markdown(
-                f"<h1 style='text-align: center; font-size: 2em; margin-top: -10px;'>Procesador T2L | PDF → Excel / CSV</h1>",
-                unsafe_allow_html=True
-            )
-            
-            # Subtítulo (pequeño)
-            st.markdown(
-                f"<p style='text-align: center; color: #444444; font-size: 0.9em; margin-bottom: 30px;'>Departamento de Procesos - Bernardino Abad SL</p>",
-                unsafe_allow_html=True
-            )
+        # 2. Título principal (Usamos st.markdown con <h2> para mantener el tamaño y estilo)
+        st.markdown(
+            f"<h2>Procesador T2L | PDF → Excel / CSV</h2>",
+            unsafe_allow_html=True
+        )
+        
+        # 3. Subtítulo (pequeño)
+        st.markdown(
+            f"<p style='color: #444444; font-size: 0.9em; margin-bottom: 30px;'>Departamento de Procesos - Bernardino Abad SL</p>",
+            unsafe_allow_html=True
+        )
     
-    st.markdown("---")
+    #st.markdown("---") # Si se incluye esta línea, aparecerá la línea divisoria.
     
     st.markdown("A continuación, sigue los pasos para la extracción, revisión y exportación de partidas T2L.")
     st.markdown("---")
@@ -340,6 +338,7 @@ def main_streamlit_app():
     # --- 1. Cargar Archivos T2L y Sumaria ---
     st.subheader("1. Cargar PDFs T2L y Nº de Sumaria")
     
+    # Uso de columnas para organizar el input de Sumaria y el uploader
     col_sumaria, col_uploader = st.columns([1, 2])
     
     with col_sumaria:
@@ -450,3 +449,4 @@ def main_streamlit_app():
 
 if __name__ == "__main__":
     main_streamlit_app()
+
