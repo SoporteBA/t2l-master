@@ -81,6 +81,7 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
     # Logo
     if logo_path and os.path.exists(logo_path):
         try:
+            # Logo en el informe PDF
             c.drawImage(logo_path, 40, y - 40, width=160, height=40, preserveAspectRatio=True, mask='auto')
         except:
             pass
@@ -165,6 +166,7 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
     t_inicio = time.time()
 
     for pdf_file_obj in uploaded_files:
+        pdf_file_obj.seek(0) # Aseguramos que el puntero está al inicio antes de leer
         pdf_filename = pdf_file_obj.name
         
         # Contenedor desde nombre de archivo
@@ -250,6 +252,7 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
 def generar_zip_csv(uploaded_excel_file):
     """Lee el Excel revisado (en memoria), genera los CSVs y los comprime en un ZIP (BytesIO)."""
     
+    uploaded_excel_file.seek(0) # Aseguramos que el puntero está al inicio antes de leer
     excel = pd.ExcelFile(uploaded_excel_file)
     zip_buffer = BytesIO()
     csv_count = 0
@@ -293,32 +296,34 @@ def generar_zip_csv(uploaded_excel_file):
 # INTERFAZ DE STREAMLIT (ADAPTADA ESTÉTICAMENTE A DUA)
 # =========================================================
 def main_streamlit_app():
-    # Configuración de la página
+    # CAMBIO CLAVE: layout="wide" para usar todo el ancho de la página
     st.set_page_config(
         page_title="=ó Procesador T2L | BA",
-        layout="centered",
+        layout="wide",
         initial_sidebar_state="collapsed"
     )
     
     # Intenta localizar el logo
     logo_path = "imagen.png" 
     
-    # --- ENCABEZADO ALINEADO A LA IZQUIERDA DEL CONTENEDOR CENTRAL (Estilo DUA) ---
+    # --- ENCABEZADO ALINEADO A LA IZQUIERDA DEL CONTENEDOR ANCHO (Estilo DUA) ---
+    
+    # Nota: El estilo de color de fondo gris de la aplicación DUA
+    # debe ser configurado en el archivo .streamlit/config.toml, no en Python.
     
     if os.path.exists(logo_path):
-        # 1. Logo (Alineado a la izquierda por defecto)
-        # Ajustamos el ancho para que coincida con la imagen de referencia.
-        st.image(logo_path, width=300) 
+        # 1. Logo (Ajuste de ancho para coincidir con la escala del DUA)
+        st.image(logo_path, width=350) 
             
-        # 2. Título principal: Negrita y tamaño grande (replicando la estructura del <h1> del DUA)
+        # 2. Título principal: Negrita y tamaño grande (replicando el estilo DUA)
         st.markdown(
-            f"<h1 style='font-size: 2em; font-weight: bold; margin-top: -10px;'>Procesador T2L | PDF → Excel / CSV</h1>",
+            f"<h1 style='font-size: 2.2em; font-weight: bold; margin-top: -20px; color: #1f3750;'>Procesador T2L | PDF → Excel / CSV</h1>",
             unsafe_allow_html=True
         )
         
         # 3. Subtítulo (pequeño)
         st.markdown(
-            f"<p style='color: #444444; font-size: 0.9em; margin-bottom: 30px;'>Departamento de Procesos - Bernardino Abad SL</p>",
+            f"<p style='color: #444444; font-size: 0.9em;'>Departamento de Procesos - Bernardino Abad SL</p>",
             unsafe_allow_html=True
         )
     
