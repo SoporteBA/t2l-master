@@ -314,7 +314,7 @@ def main_streamlit_app():
     # Encabezado con logo
     try:
         logo = Image.open("imagen.png")
-        st.image(logo, width=350) # Ajustado a 350px para mejor coincidencia
+        st.image(logo, width=500)
     except FileNotFoundError:
         st.error("No se encontró el archivo de imagen. Asegúrate de que 'imagen.png' esté en la raíz del repositorio.")
 
@@ -461,3 +461,4 @@ h1, h2, h3, h4 { color: #004C91; }
 
 if __name__ == "__main__":
     main_streamlit_app()
+
