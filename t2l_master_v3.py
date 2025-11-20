@@ -298,7 +298,7 @@ def generar_zip_csv(uploaded_excel_file):
 def main_streamlit_app():
     # CAMBIO CLAVE: layout="wide" para usar todo el ancho de la página
     st.set_page_config(
-        page_title="=ó Procesador T2L | BA",
+        page_title="Procesador T2L | BA",
         layout="wide",
         initial_sidebar_state="collapsed"
     )
@@ -317,7 +317,7 @@ def main_streamlit_app():
             
         # 2. Título principal: Negrita y tamaño grande (replicando el estilo DUA)
         st.markdown(
-            f"<h1 style='font-size: 2.2em; font-weight: bold; margin-top: -20px; color: #1f3750;'>Procesador T2L | PDF → Excel / CSV</h1>",
+             "<h3 style='color:#132136;margin-top:-10px;'>Procesador T2L | PDF → Excel / CSV</h3>",
             unsafe_allow_html=True
         )
         
@@ -450,3 +450,4 @@ def main_streamlit_app():
 
 if __name__ == "__main__":
     main_streamlit_app()
+
