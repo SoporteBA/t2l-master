@@ -296,7 +296,7 @@ def generar_zip_csv(uploaded_excel_file):
 def main_streamlit_app():
     # Configuración de la página
     st.set_page_config(
-        page_title="=ó Procesador T2L | BA",
+        page_title="Procesador T2L | BA",
         layout="centered",
         initial_sidebar_state="collapsed"
     )
@@ -449,5 +449,6 @@ def main_streamlit_app():
 
 if __name__ == "__main__":
     main_streamlit_app()
+
 
 
