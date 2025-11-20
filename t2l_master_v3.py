@@ -10,11 +10,8 @@ import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
-# Nota: Se han eliminado las dependencias de customtkinter/tkinter, 
-# subprocess y filedialog, ya que son reemplazadas por Streamlit.
-
 # =========================================================
-# FUNCIONES DE UTILIDAD (ADAPTACIONES MÍNIMAS)
+# FUNCIONES DE UTILIDAD Y PARSEO
 # =========================================================
 
 # ---------------------------------------------------------
@@ -23,7 +20,6 @@ from reportlab.pdfgen import canvas
 def extract_text(uploaded_file_object):
     """Extrae texto de un objeto de archivo cargado por Streamlit (en memoria)."""
     text = ""
-    # pdfplumber puede abrir el objeto de archivo de Streamlit directamente
     with pdfplumber.open(uploaded_file_object) as pdf:
         for p in pdf.pages:
             t = p.extract_text()
@@ -35,7 +31,7 @@ def extract_text(uploaded_file_object):
 # PARSEAR BULTOS + KILOS (LÓGICA ORIGINAL)
 # ---------------------------------------------------------
 def parse_t2l(text):
-    """Extrae bultos y kilos del texto del T2L (lógica original intacta)."""
+    """Extrae bultos y kilos del texto del T2L."""
     lines = [l.strip() for l in text.split("\n") if l.strip()]
     results = []
 
@@ -48,7 +44,7 @@ def parse_t2l(text):
             m_pkg = re.search(r"(\d+)", line)
             bultos = m_pkg.group(1) if m_pkg else ""
 
-            # KILOS (línea siguiente a la que contiene "Gross Mass (kg)")
+            # KILOS
             kilos = ""
             for j in range(i, min(i + 20, len(lines))):
                 if "Gross Mass" in lines[j]:
@@ -85,10 +81,9 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
     # Logo
     if logo_path and os.path.exists(logo_path):
         try:
-            # Si el logo se sube al repo de Streamlit, será accesible aquí.
             c.drawImage(logo_path, 40, y - 40, width=160, height=40, preserveAspectRatio=True, mask='auto')
         except:
-            pass # Ignorar si no se puede cargar el logo
+            pass
 
     y -= 70
     c.setFont("Helvetica-Bold", 16)
@@ -107,7 +102,8 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
 
     c.setFont("Helvetica", 11)
     for cont, total in resumen.items():
-        c.drawString(40, y, f" {cont}   Total partidas: {total}")
+        # LÍNEA CORREGIDA: Eliminada la comilla doble extra
+        c.drawString(40, y, f"ñ {cont}   Total partidas: {total}") 
         y -= 18
         if y < 80:
             c.showPage()
@@ -127,7 +123,7 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
 # LIMPIEZA PARA CSV (Lógica original)
 # ---------------------------------------------------------
 def clean_int_str(x):
-    """Limpia valores numéricos para exportación como enteros (ej: '1.0' -> '1')."""
+    """Limpia valores numéricos para exportación como enteros."""
     if x is None:
         return ""
     s = str(x).strip()
@@ -138,7 +134,7 @@ def clean_int_str(x):
     return s
 
 def clean_kilos_str(x):
-    """Limpia y formatea los kilos (ej: '1,234.56' -> '1234.56' -> '1234,56')."""
+    """Limpia y formatea los kilos."""
     if x is None:
         return ""
     s = str(x).strip()
@@ -162,10 +158,7 @@ def clean_kilos_str(x):
 # PROCESAR ARCHIVOS T2L Y GENERAR EXCEL/PDF (ADAPTADA)
 # ---------------------------------------------------------
 def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
-    """
-    Procesa los objetos de archivos PDF cargados y genera el Excel y el Informe
-    PDF en buffers de BytesIO.
-    """
+    """Procesa PDFs cargados y genera Excel y Informe PDF en BytesIO."""
     excel_output = BytesIO()
     writer = pd.ExcelWriter(excel_output, engine="openpyxl")
 
@@ -173,7 +166,7 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
     t_inicio = time.time()
 
     for pdf_file_obj in uploaded_files:
-        pdf_filename = pdf_file_obj.name # Nombre original para la hoja
+        pdf_filename = pdf_file_obj.name
         
         # Contenedor desde nombre de archivo
         m_cont = re.search(r"([A-Z]{4}\d{6})", pdf_filename)
@@ -204,25 +197,15 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
 
         if not final_rows:
             df = pd.DataFrame([{
-                "Bultos": "",
-                "Kilos": "",
-                "Fijo_col3": "",
-                "Fijo_col4": "SIN PARTIDAS",
-                "Vacio5": "",
-                "Vacio6": "",
-                "Fijo_col7": "",
-                "Fijo_col8": "",
-                "Contenedor": cont,
-                "Fijo_col10": "",
-                "Vacio11": "",
-                "Sumaria": sumaria,
-                "Orden": ""
+                "Bultos": "", "Kilos": "", "Fijo_col3": "", "Fijo_col4": "SIN PARTIDAS",
+                "Vacio5": "", "Vacio6": "", "Fijo_col7": "", "Fijo_col8": "",
+                "Contenedor": cont, "Fijo_col10": "", "Vacio11": "", "Sumaria": sumaria, "Orden": ""
             }])
             resumen[cont] = 0
         else:
             df = pd.DataFrame(final_rows)
 
-            # Sumatorios (Lógica original de tu código)
+            # Sumatorios
             try:
                 total_bultos = sum(int(b or "0") for b, _ in rows_raw)
             except:
@@ -241,24 +224,11 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
                 total_kilos = ""
 
             df.loc[len(df)] = [
-                total_bultos,
-                total_kilos,
-                "",
-                "TOTAL",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
-                ""
+                total_bultos, total_kilos, "", "TOTAL", "", "", "", "", "", "", "", "", ""
             ]
 
             resumen[cont] = len(rows_raw)
 
-        # Escribir al buffer de Excel
         df.to_excel(writer, sheet_name=pdf_filename[:31], index=False)
 
     writer.close()
@@ -293,7 +263,7 @@ def generar_zip_csv(uploaded_excel_file):
             if df.empty:
                 continue
 
-            # quitar última fila (TOTAL) - Revisamos si tiene más de 1 fila y si la última contiene "TOTAL"
+            # quitar última fila (TOTAL)
             if len(df) > 1 and df.iloc[-1].astype(str).str.contains('TOTAL', na=False).any():
                 df = df.iloc[:-1].copy()
             else:
@@ -321,37 +291,45 @@ def generar_zip_csv(uploaded_excel_file):
 
 
 # =========================================================
-# INTERFAZ DE STREAMLIT
+# INTERFAZ DE STREAMLIT (ADAPTADA ESTÉTICAMENTE)
 # =========================================================
 def main_streamlit_app():
-    # Configuración de la página
+    # Configuración de la página (Favicon y colores en .streamlit/config.toml)
     st.set_page_config(
         page_title="=ó Procesador T2L | BA",
         layout="centered",
         initial_sidebar_state="collapsed"
     )
+    
+    # Intenta localizar el logo
+    logo_path = "imagen.png" 
+    
+    # --- CENTRADO DEL LOGO y TÍTULOS (Replicando la estructura de Vuelco Magnus) ---
+    
+    # Usamos tres columnas para centrar el logo y el texto
+    col_left, col_center, col_right = st.columns([1, 4, 1])
 
-    st.title("=ó Procesador T2L")
-    st.markdown("© Departamento de Procesos | Bernardino Abad Edition 2025")
+    if os.path.exists(logo_path):
+        with col_center:
+            # Logo
+            st.image(logo_path, width=280) 
+            
+            # Título principal centrado con HTML/CSS
+            st.markdown(
+                f"<h1 style='text-align: center; font-size: 2em; margin-top: -10px;'>Procesador T2L | PDF → Excel / CSV</h1>",
+                unsafe_allow_html=True
+            )
+            
+            # Subtítulo (pequeño)
+            st.markdown(
+                f"<p style='text-align: center; color: #444444; font-size: 0.9em; margin-bottom: 30px;'>Departamento de Procesos - Bernardino Abad SL</p>",
+                unsafe_allow_html=True
+            )
+    
     st.markdown("---")
     
-    # Intenta localizar el logo (asumiendo que está subido al repo)
-    logo_path = "imagen.png" 
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=200)
-
-    # --- 1. Cargar Archivos T2L y Sumaria ---
-    st.subheader("1. Cargar PDFs T2L y Nº de Sumaria")
-    
-    # Input para la Sumaria
-    sumaria = st.text_input("Introduce Nº de Sumaria (11 dígitos):", max_chars=11, key="sumaria_input")
-    
-    # Carga de múltiples archivos PDF
-    uploaded_files = st.file_uploader(
-        "Sube todos los **PDFs T2L**",
-        type=["pdf"],
-        accept_multiple_files=True
-    )
+    st.markdown("A continuación, sigue los pasos para la extracción, revisión y exportación de partidas T2L.")
+    st.markdown("---")
     
     # Estado de la sesión para manejar los pasos
     if 'excel_bytes' not in st.session_state:
@@ -359,6 +337,23 @@ def main_streamlit_app():
         st.session_state.informe_pdf_bytes = None
         st.session_state.t_total = None
 
+    # --- 1. Cargar Archivos T2L y Sumaria ---
+    st.subheader("1. Cargar PDFs T2L y Nº de Sumaria")
+    
+    col_sumaria, col_uploader = st.columns([1, 2])
+    
+    with col_sumaria:
+        # Input para la Sumaria
+        sumaria = st.text_input("Nº de Sumaria (11 dígitos):", max_chars=11, key="sumaria_input")
+    
+    with col_uploader:
+        # Carga de múltiples archivos PDF
+        uploaded_files = st.file_uploader(
+            "Sube todos los **PDFs T2L**",
+            type=["pdf"],
+            accept_multiple_files=True
+        )
+    
     # Botón de procesamiento (PASO 1)
     if st.button("=Á Procesar Archivos T2L", type="primary", use_container_width=True):
         
@@ -395,9 +390,9 @@ def main_streamlit_app():
         st.subheader("2. Descargar y Revisar Excel Base")
         st.info("Descarga el Excel de trabajo, revisa y ajusta los datos, **guárdalo** y vuelve para subirlo.")
         
-        col1, col2 = st.columns(2)
+        col_dl_excel, col_dl_pdf = st.columns(2)
         
-        with col1:
+        with col_dl_excel:
             st.download_button(
                 label="⬇️ Descargar Excel base (T2L_RESULTADO.xlsx)",
                 data=st.session_state.excel_bytes,
@@ -405,7 +400,7 @@ def main_streamlit_app():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 help="Excel con todas las partidas extraídas."
             )
-        with col2:
+        with col_dl_pdf:
             st.download_button(
                 label="⬇️ Descargar Informe PDF",
                 data=st.session_state.informe_pdf_bytes,
@@ -454,5 +449,4 @@ def main_streamlit_app():
         st.info("Proceso terminado. Puedes empezar un nuevo proceso recargando la página o cambiando los inputs.")
 
 if __name__ == "__main__":
-
     main_streamlit_app()
