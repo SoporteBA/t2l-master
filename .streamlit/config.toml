@@ -1,17 +1,19 @@
 [theme]
-# Color principal (botones, acentos) - Un verde oscuro corporativo
+# Color principal (botones, acentos) - Azul corporativo
 primaryColor = "#004C91"
 
-# Color de fondo general de la aplicación
+# Color de fondo general de la aplicación - Gris/Blanco muy claro
 backgroundColor = "#F8FAFD"
 
-# Color de fondo secundario (barra lateral, algunos widgets)
+# Color de fondo secundario (widgets, inputs, barra lateral) - Gris claro
 secondaryBackgroundColor = "#E9EEF5"
 
 # Color del texto principal
 textColor = "#0E1117"
 
-# Fuente de la aplicación (opcional, deja vacío para la fuente por defecto)
-# font = "sans serif" 
-
+# Fuente de la aplicación
 font = "sans serif"
+
+[browser]
+# Asegúrate de que este valor coincida con el nombre de tu archivo favicon
+favicon = "favicon_t2l.png"
