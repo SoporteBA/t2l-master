@@ -358,7 +358,7 @@ h1, h2, h3, h4 { color: #004C91; }
         )
     
     # Botón de procesamiento (PASO 1)
-    if st.button("=Á Procesar Archivos T2L", type="primary", use_container_width=True):
+    if st.button("Procesar Archivos T2L", type="primary", use_container_width=True):
         
         # Validaciones
         if not sumaria.isdigit() or len(sumaria) != 11:
@@ -449,8 +449,9 @@ h1, h2, h3, h4 { color: #004C91; }
         for name, txt_bytes in st.session_state.txt_files.items():
             
             with cols[i % 3]: # Rota entre 3 columnas
+                # Se eliminan los caracteres '=Á' del botón de descarga
                 st.download_button(
-                    label=f"=Á Descargar {name}.txt",
+                    label=f"⬇️ Descargar {name}.txt", 
                     data=txt_bytes,
                     file_name=f"{name}.txt",
                     mime="text/plain",
