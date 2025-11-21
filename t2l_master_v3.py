@@ -451,7 +451,7 @@ h1, h2, h3, h4 { color: #004C91; }
         st.subheader("4. Descargar Archivo Final")
         
         st.download_button(
-            label=f"=Á Descargar {st.session_state.csv_count} CSVs (Archivo ZIP)",
+            label=f"Descargar {st.session_state.csv_count} CSVs (Archivo ZIP)",
             data=st.session_state.zip_bytes,
             file_name="CSV_T2L_FINAL.zip",
             mime="application/zip",
@@ -462,6 +462,7 @@ h1, h2, h3, h4 { color: #004C91; }
 
 if __name__ == "__main__":
     main_streamlit_app()
+
 
 
 
