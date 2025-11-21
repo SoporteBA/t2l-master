@@ -9,7 +9,6 @@ import pdfplumber
 import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-# CORRECCIÓN 1: Importar Image de PIL
 from PIL import Image 
 
 
@@ -251,50 +250,44 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
     return excel_bytes, informe_pdf_bytes, t_total
 
 # ---------------------------------------------------------
-# GENERAR CSVs DESDE EXCEL Y COMPRIMIR EN ZIP (NUEVA FUNCIÓN)
+# GENERAR TXT INDIVIDUALES (ADAPTACIÓN DE GENERAR_ZIP_CSV)
 # ---------------------------------------------------------
-def generar_zip_csv(uploaded_excel_file):
-    """Lee el Excel revisado (en memoria), genera los CSVs y los comprime en un ZIP (BytesIO)."""
+def generar_txt_en_memoria(uploaded_excel_file):
+    """Lee el Excel revisado (en memoria) y genera un diccionario de archivos TXT."""
     
     uploaded_excel_file.seek(0) # Aseguramos que el puntero está al inicio antes de leer
     excel = pd.ExcelFile(uploaded_excel_file)
-    zip_buffer = BytesIO()
-    csv_count = 0
+    txt_files = {}
     
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+    for sheet in excel.sheet_names:
+        df = pd.read_excel(excel, sheet_name=sheet, dtype=str)
+
+        if df.empty:
+            continue
+
+        # quitar última fila (TOTAL)
+        if len(df) > 1 and df.iloc[-1].astype(str).str.contains('TOTAL', na=False).any():
+            df = df.iloc[:-1].copy()
+        else:
+            df = df.copy()
+
+        # limpiar columnas numéricas
+        for col in ["Bultos", "Fijo_col3", "Fijo_col7", "Fijo_col8", "Sumaria", "Orden"]:
+            if col in df.columns:
+                df[col] = df[col].map(clean_int_str)
+
+        if "Kilos" in df.columns:
+            df["Kilos"] = df["Kilos"].map(clean_kilos_str)
+
+        # Generar el contenido TXT (separado por punto y coma, sin encabezado)
+        txt_buffer = BytesIO()
+        df.to_csv(txt_buffer, sep=";", header=False, index=False, encoding="utf-8")
+        txt_buffer.seek(0)
         
-        for sheet in excel.sheet_names:
-            df = pd.read_excel(excel, sheet_name=sheet, dtype=str)
-
-            if df.empty:
-                continue
-
-            # quitar última fila (TOTAL)
-            if len(df) > 1 and df.iloc[-1].astype(str).str.contains('TOTAL', na=False).any():
-                df = df.iloc[:-1].copy()
-            else:
-                df = df.copy()
-
-            # limpiar columnas numéricas
-            for col in ["Bultos", "Fijo_col3", "Fijo_col7", "Fijo_col8", "Sumaria", "Orden"]:
-                if col in df.columns:
-                    df[col] = df[col].map(clean_int_str)
-
-            if "Kilos" in df.columns:
-                df["Kilos"] = df["Kilos"].map(clean_kilos_str)
-
-            # Generar el CSV en un buffer de BytesIO
-            csv_buffer = BytesIO()
-            df.to_csv(csv_buffer, sep=";", header=False, index=False, encoding="utf-8")
-            csv_buffer.seek(0)
-            
-            # Escribir el buffer CSV al archivo ZIP
-            zf.writestr(f"{sheet}.csv", csv_buffer.read())
-            csv_count += 1
-            
-    zip_buffer.seek(0)
-    return zip_buffer, csv_count
-
+        # Almacenar los bytes del archivo TXT con el nombre de la hoja
+        txt_files[sheet] = txt_buffer.read()
+        
+    return txt_files
 
 # =========================================================
 # INTERFAZ DE STREAMLIT (ADAPTADA ESTÉTICAMENTE A DUA)
@@ -305,17 +298,14 @@ def main_streamlit_app():
         page_title="Procesador T2L | BA",
         page_icon="icono.ico",
         layout="wide",
-        # Eliminamos initial_sidebar_state="collapsed" ya que no es necesario con wide
     )
     
     # --- ENCABEZADO ALINEADO A LA IZQUIERDA DEL CONTENEDOR ANCHO (Estilo DUA) ---
     
-    # CORRECCIÓN 2: El código debe estar indentado dentro de la función
-    
     # Encabezado con logo
     try:
         logo = Image.open("imagen.png")
-        st.image(logo, width=500)
+        st.image(logo, width=350) # Ajustado a 350px para mejor coincidencia
     except FileNotFoundError:
         st.error("No se encontró el archivo de imagen. Asegúrate de que 'imagen.png' esté en la raíz del repositorio.")
 
@@ -347,6 +337,7 @@ h1, h2, h3, h4 { color: #004C91; }
         st.session_state.excel_bytes = None
         st.session_state.informe_pdf_bytes = None
         st.session_state.t_total = None
+        st.session_state.txt_files = None # Inicializamos la variable para los TXT
 
     # --- 1. Cargar Archivos T2L y Sumaria ---
     st.subheader("1. Cargar PDFs T2L y Nº de Sumaria")
@@ -367,7 +358,7 @@ h1, h2, h3, h4 { color: #004C91; }
         )
     
     # Botón de procesamiento (PASO 1)
-    if st.button("Procesar Archivos T2L", type="primary", use_container_width=True):
+    if st.button("=Á Procesar Archivos T2L", type="primary", use_container_width=True):
         
         # Validaciones
         if not sumaria.isdigit() or len(sumaria) != 11:
@@ -381,6 +372,7 @@ h1, h2, h3, h4 { color: #004C91; }
         st.session_state.excel_bytes = None
         st.session_state.informe_pdf_bytes = None
         st.session_state.t_total = None
+        st.session_state.txt_files = None
 
         with st.spinner('ñ Procesando T2L, por favor espera...'):
             excel_bytes, informe_pdf_bytes, t_total = procesar_t2l_streamlit(
@@ -421,9 +413,9 @@ h1, h2, h3, h4 { color: #004C91; }
                 help=f"Informe de proceso ({st.session_state.t_total:.2f} s)."
             )
         
-        # --- 3. Cargar Excel Revisado y Generar CSVs (Paso 3) ---
+        # --- 3. Cargar Excel Revisado y Generar TXT (Paso 3) ---
         st.markdown("---")
-        st.subheader("3. Subir Excel Revisado y Generar CSVs")
+        st.subheader("3. Subir Excel Revisado y Generar Archivos TXT")
         
         revised_excel = st.file_uploader(
             "Sube aquí el **Excel revisado** (el mismo archivo después de tus cambios)",
@@ -432,37 +424,43 @@ h1, h2, h3, h4 { color: #004C91; }
         )
         
         if revised_excel:
-            if st.button("🎉 Generar Archivo ZIP con CSVs", type="secondary", use_container_width=True):
-                with st.spinner('ñ Generando ficheros CSV y comprimiendo en ZIP...'):
+            if st.button("🎉 Generar Archivos TXT", type="secondary", use_container_width=True):
+                with st.spinner('ñ Generando ficheros TXT...'):
                     
-                    zip_buffer, csv_count = generar_zip_csv(revised_excel)
+                    txt_files = generar_txt_en_memoria(revised_excel)
                     
-                    if csv_count > 0:
-                        st.session_state.zip_bytes = zip_buffer.read()
-                        st.session_state.csv_count = csv_count
-                        st.success(f"✅ Proceso Completado. Se generaron {csv_count} ficheros CSV.")
+                    if txt_files:
+                        st.session_state.txt_files = txt_files
+                        st.session_state.txt_count = len(txt_files)
+                        st.success(f"✅ Proceso Completado. Se generaron {len(txt_files)} ficheros TXT.")
                     else:
-                        st.error("No se pudieron generar CSVs. Verifica el formato del Excel revisado.")
+                        st.error("No se pudieron generar archivos TXT. Verifica el formato del Excel revisado.")
 
         
-    # --- 4. Descargar Resultado Final (Paso Final) ---
-    if 'zip_bytes' in st.session_state and st.session_state.zip_bytes:
+    # --- 4. Descargar Resultados Finales Individuales (Paso Final) ---
+    if 'txt_files' in st.session_state and st.session_state.txt_files:
         st.markdown("---")
-        st.subheader("4. Descargar Archivo Final")
+        st.subheader("4. Descargar Archivos TXT Individuales")
         
-        st.download_button(
-            label=f"Descargar {st.session_state.csv_count} CSVs (Archivo ZIP)",
-            data=st.session_state.zip_bytes,
-            file_name="CSV_T2L_FINAL.zip",
-            mime="application/zip",
-            help="Contiene todos los archivos CSV listos para el sistema.",
-            type="primary"
-        )
-        st.info("Proceso terminado. Puedes empezar un nuevo proceso recargando la página o cambiando los inputs.")
+        # Creamos columnas para organizar los botones de descarga
+        cols = st.columns(3)
+        i = 0
+        
+        for name, txt_bytes in st.session_state.txt_files.items():
+            
+            with cols[i % 3]: # Rota entre 3 columnas
+                st.download_button(
+                    label=f"=Á Descargar {name}.txt",
+                    data=txt_bytes,
+                    file_name=f"{name}.txt",
+                    mime="text/plain",
+                    help=f"Contiene las partidas para el contenedor {name}.",
+                    type="primary",
+                    key=f"dl_txt_{name}" # Clave única para cada botón
+                )
+            i += 1
+
+        st.info(f"Proceso terminado. Se generaron {st.session_state.txt_count} archivos TXT. Puedes empezar un nuevo proceso recargando la página o cambiando los inputs.")
 
 if __name__ == "__main__":
     main_streamlit_app()
-
-
-
-
