@@ -160,22 +160,39 @@ def clean_kilos_str(x):
 # PROCESAR ARCHIVOS T2L Y GENERAR EXCEL/PDF (ADAPTADA)
 # ---------------------------------------------------------
 def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
-    """Procesa PDFs cargados y genera Excel y Informe PDF en BytesIO."""
+    """
+    Procesa PDFs cargados y genera Excel y Informe PDF en BytesIO.
+    *** CORRECCIÓN: Extracción de matrícula del Contenedor del texto del PDF ***
+    """
     excel_output = BytesIO()
     writer = pd.ExcelWriter(excel_output, engine="openpyxl")
 
     resumen = {}
     t_inicio = time.time()
 
+    # Patrón de expresión regular para matrículas de contenedor (4 letras + 6 o 7 dígitos)
+    CONTAINER_PATTERN = r"([A-Z]{4}\d{6,7})"
+
     for pdf_file_obj in uploaded_files:
-        pdf_file_obj.seek(0) # Aseguramos que el puntero está al inicio antes de leer
+        pdf_file_obj.seek(0)
         pdf_filename = pdf_file_obj.name
         
-        # Contenedor desde nombre de archivo
-        m_cont = re.search(r"([A-Z]{4}\d{6})", pdf_filename)
-        cont = m_cont.group(1) if m_cont else "SINCONT"
-
+        # 1. Extraer el texto completo del PDF
         text = extract_text(pdf_file_obj)
+
+        # 2. INTENTO 1: Buscar matrícula en el texto del PDF
+        m_cont_text = re.search(CONTAINER_PATTERN, text)
+        cont = "SINCONT"
+        
+        if m_cont_text:
+            cont = m_cont_text.group(1).upper()
+        else:
+            # 3. INTENTO 2: Si no se encuentra en el texto, buscar en el nombre del archivo
+            m_cont_filename = re.search(CONTAINER_PATTERN, pdf_filename)
+            if m_cont_filename:
+                 cont = m_cont_filename.group(1).upper()
+            # Si ambos fallan, cont sigue siendo "SINCONT"
+
         rows_raw = parse_t2l(text)
 
         final_rows = []
