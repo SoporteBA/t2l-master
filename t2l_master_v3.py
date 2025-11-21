@@ -303,6 +303,7 @@ def main_streamlit_app():
     # CAMBIO CLAVE: layout="wide" para usar todo el ancho de la página
     st.set_page_config(
         page_title="Procesador T2L | BA",
+        page_icon="icono.ico",
         layout="wide",
         # Eliminamos initial_sidebar_state="collapsed" ya que no es necesario con wide
     )
@@ -461,5 +462,6 @@ h1, h2, h3, h4 { color: #004C91; }
 
 if __name__ == "__main__":
     main_streamlit_app()
+
 
 
