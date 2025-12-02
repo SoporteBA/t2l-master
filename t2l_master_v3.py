@@ -22,6 +22,7 @@ from PIL import Image
 def extract_text(uploaded_file_object):
     """Extrae texto de un objeto de archivo cargado por Streamlit (en memoria)."""
     text = ""
+    uploaded_file_object.seek(0) 
     with pdfplumber.open(uploaded_file_object) as pdf:
         for p in pdf.pages:
             t = p.extract_text()
@@ -166,6 +167,9 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
 
     resumen = {}
     t_inicio = time.time()
+    
+    # Patrón de expresión regular para matrículas de contenedor (4 letras + 6 o 7 dígitos)
+    CONTAINER_PATTERN = r"([A-Z]{4}\d{6,7})" # Mantenemos la variable aunque no se use en el flujo actual
 
     for pdf_file_obj in uploaded_files:
         pdf_file_obj.seek(0) # Aseguramos que el puntero está al inicio antes de leer
@@ -250,7 +254,7 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
     return excel_bytes, informe_pdf_bytes, t_total
 
 # ---------------------------------------------------------
-# GENERAR TXT INDIVIDUALES (ADAPTACIÓN DE GENERAR_ZIP_CSV)
+# GENERAR TXT INDIVIDUALES (LÓGICA ACTUAL)
 # ---------------------------------------------------------
 def generar_txt_en_memoria(uploaded_excel_file):
     """Lee el Excel revisado (en memoria) y genera un diccionario de archivos TXT."""
@@ -288,6 +292,22 @@ def generar_txt_en_memoria(uploaded_excel_file):
         txt_files[sheet] = txt_buffer.read()
         
     return txt_files
+
+# ---------------------------------------------------------
+# NUEVA FUNCIÓN: GENERAR ZIP DESDE EL DICCIONARIO TXT
+# ---------------------------------------------------------
+def generar_zip_desde_txt(txt_files):
+    """Toma el diccionario de contenidos TXT y los comprime en un único archivo ZIP."""
+    zip_buffer = BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for filename, content in txt_files.items():
+            # El nombre de archivo en el ZIP será la clave del diccionario + extensión .txt
+            zf.writestr(f"{filename}.txt", content)
+            
+    zip_buffer.seek(0)
+    return zip_buffer, len(txt_files)
+
 
 # =========================================================
 # INTERFAZ DE STREAMLIT (ADAPTADA ESTÉTICAMENTE A DUA)
@@ -437,31 +457,48 @@ h1, h2, h3, h4 { color: #004C91; }
                         st.error("No se pudieron generar archivos TXT. Verifica el formato del Excel revisado.")
 
         
-    # --- 4. Descargar Resultados Finales Individuales (Paso Final) ---
+    # --- 4. Descargar Resultados Finales (Individual y Masivo) ---
     if 'txt_files' in st.session_state and st.session_state.txt_files:
         st.markdown("---")
-        st.subheader("4. Descargar Archivos TXT Individuales")
+        st.subheader("4. Descargar Archivos TXT")
         
-        # Creamos columnas para organizar los botones de descarga
+        # Generar ZIP para descarga masiva
+        zip_buffer, zip_count = generar_zip_desde_txt(st.session_state.txt_files)
+        
+        col_masivo, col_vacio = st.columns([1, 2])
+        
+        with col_masivo:
+            st.download_button(
+                label=f"⬇️ Descargar TODOS los {zip_count} TXT (Archivo ZIP)",
+                data=zip_buffer,
+                file_name="Archivos_T2L_TXT.zip",
+                mime="application/zip",
+                help="Descarga todos los TXT en un único archivo ZIP.",
+                type="primary",
+                key="dl_zip_final"
+            )
+        
+        st.markdown("**Descarga Individual:**")
+        
+        # Creamos columnas para organizar los botones de descarga individual
         cols = st.columns(3)
         i = 0
         
         for name, txt_bytes in st.session_state.txt_files.items():
             
             with cols[i % 3]: # Rota entre 3 columnas
-                # Se eliminan los caracteres '=Á' del botón de descarga
                 st.download_button(
-                    label=f"⬇️ Descargar {name}.txt", 
+                    label=f"⬇️ {name}.txt", 
                     data=txt_bytes,
                     file_name=f"{name}.txt",
                     mime="text/plain",
                     help=f"Contiene las partidas para el contenedor {name}.",
-                    type="primary",
-                    key=f"dl_txt_{name}" # Clave única para cada botón
+                    type="secondary", # Usamos secondary para diferenciar del botón masivo
+                    key=f"dl_txt_{name}" 
                 )
             i += 1
 
-        st.info(f"Proceso terminado. Se generaron {st.session_state.txt_count} archivos TXT. Puedes empezar un nuevo proceso recargando la página o cambiando los inputs.")
+        st.info(f"Proceso terminado. Se generaron {st.session_state.txt_count} archivos TXT. Puede empezar un nuevo proceso.")
 
 if __name__ == "__main__":
     main_streamlit_app()
