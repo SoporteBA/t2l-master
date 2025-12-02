@@ -158,26 +158,29 @@ def clean_kilos_str(x):
 # =========================================================
 
 # ---------------------------------------------------------
-# PROCESAR ARCHIVOS T2L Y GENERAR EXCEL/PDF (ADAPTADA)
+# PROCESAR ARCHIVOS T2L Y GENERAR EXCEL/PDF (MODIFICADA: Corrección Matrícula)
 # ---------------------------------------------------------
 def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
-    """Procesa PDFs cargados y genera Excel y Informe PDF en BytesIO."""
+    """
+    Procesa PDFs cargados y genera Excel y Informe PDF en BytesIO.
+    *** CORRECCIÓN: La matrícula ahora busca 7 dígitos para incluir el dígito verificador ***
+    """
     excel_output = BytesIO()
     writer = pd.ExcelWriter(excel_output, engine="openpyxl")
 
     resumen = {}
     t_inicio = time.time()
     
-    # Patrón de expresión regular para matrículas de contenedor (4 letras + 6 o 7 dígitos)
-    CONTAINER_PATTERN = r"([A-Z]{4}\d{6,7})" # Mantenemos la variable aunque no se use en el flujo actual
+    # PATRÓN CORREGIDO: Busca 4 letras seguidas de 7 dígitos (código de serie + dígito verificador)
+    CONTAINER_PATTERN = r"([A-Z]{4}\d{7})" 
 
     for pdf_file_obj in uploaded_files:
         pdf_file_obj.seek(0) # Aseguramos que el puntero está al inicio antes de leer
         pdf_filename = pdf_file_obj.name
         
         # Contenedor desde nombre de archivo
-        m_cont = re.search(r"([A-Z]{4}\d{6})", pdf_filename)
-        cont = m_cont.group(1) if m_cont else "SINCONT"
+        m_cont = re.search(CONTAINER_PATTERN, pdf_filename) # USAMOS EL PATRÓN CORREGIDO
+        cont = m_cont.group(1) if m_cont else "SINCONT" # cont ahora capturará 7 dígitos
 
         text = extract_text(pdf_file_obj)
         rows_raw = parse_t2l(text)
@@ -240,7 +243,7 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
 
     writer.close()
     excel_output.seek(0)
-    excel_bytes = excel_output.read()
+    excel_bytes = output.read()
 
     t_total = time.time() - t_inicio
 
@@ -254,7 +257,7 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
     return excel_bytes, informe_pdf_bytes, t_total
 
 # ---------------------------------------------------------
-# GENERAR TXT INDIVIDUALES (LÓGICA ACTUAL)
+# GENERAR TXT INDIVIDUALES (LÓGICA ORIGINAL)
 # ---------------------------------------------------------
 def generar_txt_en_memoria(uploaded_excel_file):
     """Lee el Excel revisado (en memoria) y genera un diccionario de archivos TXT."""
@@ -292,22 +295,6 @@ def generar_txt_en_memoria(uploaded_excel_file):
         txt_files[sheet] = txt_buffer.read()
         
     return txt_files
-
-# ---------------------------------------------------------
-# NUEVA FUNCIÓN: GENERAR ZIP DESDE EL DICCIONARIO TXT
-# ---------------------------------------------------------
-def generar_zip_desde_txt(txt_files):
-    """Toma el diccionario de contenidos TXT y los comprime en un único archivo ZIP."""
-    zip_buffer = BytesIO()
-    
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for filename, content in txt_files.items():
-            # El nombre de archivo en el ZIP será la clave del diccionario + extensión .txt
-            zf.writestr(f"{filename}.txt", content)
-            
-    zip_buffer.seek(0)
-    return zip_buffer, len(txt_files)
-
 
 # =========================================================
 # INTERFAZ DE STREAMLIT (ADAPTADA ESTÉTICAMENTE A DUA)
@@ -457,48 +444,31 @@ h1, h2, h3, h4 { color: #004C91; }
                         st.error("No se pudieron generar archivos TXT. Verifica el formato del Excel revisado.")
 
         
-    # --- 4. Descargar Resultados Finales (Individual y Masivo) ---
+    # --- 4. Descargar Resultados Finales Individuales (Paso Final) ---
     if 'txt_files' in st.session_state and st.session_state.txt_files:
         st.markdown("---")
-        st.subheader("4. Descargar Archivos TXT")
+        st.subheader("4. Descargar Archivos TXT Individuales")
         
-        # Generar ZIP para descarga masiva
-        zip_buffer, zip_count = generar_zip_desde_txt(st.session_state.txt_files)
-        
-        col_masivo, col_vacio = st.columns([1, 2])
-        
-        with col_masivo:
-            st.download_button(
-                label=f"⬇️ Descargar TODOS los {zip_count} TXT (Archivo ZIP)",
-                data=zip_buffer,
-                file_name="Archivos_T2L_TXT.zip",
-                mime="application/zip",
-                help="Descarga todos los TXT en un único archivo ZIP.",
-                type="primary",
-                key="dl_zip_final"
-            )
-        
-        st.markdown("**Descarga Individual:**")
-        
-        # Creamos columnas para organizar los botones de descarga individual
+        # Creamos columnas para organizar los botones de descarga
         cols = st.columns(3)
         i = 0
         
         for name, txt_bytes in st.session_state.txt_files.items():
             
             with cols[i % 3]: # Rota entre 3 columnas
+                # Botón de descarga limpio
                 st.download_button(
-                    label=f"⬇️ {name}.txt", 
+                    label=f"⬇️ Descargar {name}.txt", 
                     data=txt_bytes,
                     file_name=f"{name}.txt",
                     mime="text/plain",
                     help=f"Contiene las partidas para el contenedor {name}.",
-                    type="secondary", # Usamos secondary para diferenciar del botón masivo
-                    key=f"dl_txt_{name}" 
+                    type="primary",
+                    key=f"dl_txt_{name}" # Clave única para cada botón
                 )
             i += 1
 
-        st.info(f"Proceso terminado. Se generaron {st.session_state.txt_count} archivos TXT. Puede empezar un nuevo proceso.")
+        st.info(f"Proceso terminado. Se generaron {st.session_state.txt_count} archivos TXT. Puedes empezar un nuevo proceso recargando la página o cambiando los inputs.")
 
 if __name__ == "__main__":
     main_streamlit_app()
