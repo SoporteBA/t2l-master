@@ -58,10 +58,10 @@ def parse_t2l(text):
                             v = m_g.group(1).replace(",", ".")
                             try:
                                 f = float(v)
-                                if f.is_integer():
-                                    kilos = str(int(f)).replace(".", ",")
-                                else:
-                                    kilos = str(f).replace(".", ",")
+                                # MODIFICACIÓN CLAVE: Almacenamos KILOS como STRING con PUNTO 
+                                # (separador estándar para float en Python/Pandas) para facilitar la tipificación a float en Excel.
+                                # Luego el formateo a coma se hará en el TXT o limpieza, no aquí.
+                                kilos = str(f)
                             except:
                                 kilos = ""
                     break
@@ -123,7 +123,7 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
     c.save()
 
 # ---------------------------------------------------------
-# LIMPIEZA PARA CSV (Lógica original)
+# LIMPIEZA PARA CSV/TXT (Lógica original)
 # ---------------------------------------------------------
 def clean_int_str(x):
     """Limpia valores numéricos para exportación como enteros."""
@@ -143,13 +143,16 @@ def clean_kilos_str(x):
     s = str(x).strip()
     if s == "":
         return ""
-    s = s.replace(" ", "").replace(",", ".")
+    # Esta función ahora solo formatea el STRING para el TXT/CSV, 
+    # asumiendo que el DF interno usa el PUNTO.
+    s = s.replace(" ", "").replace(",", ".") # Asegurar que es float-compatible
     try:
         v = float(s)
         if v.is_integer():
             return str(int(v))
         else:
-            return str(v).replace(".", ",")
+            # Vuelve a usar la coma para el formato final del TXT/CSV
+            return str(v).replace(".", ",") 
     except:
         return ""
 
@@ -158,32 +161,30 @@ def clean_kilos_str(x):
 # =========================================================
 
 # ---------------------------------------------------------
-# PROCESAR ARCHIVOS T2L Y GENERAR EXCEL/PDF (MODIFICADA: Corrección Matrícula)
+# PROCESAR ARCHIVOS T2L Y GENERAR EXCEL/PDF (MODIFICADA: Tipificación)
 # ---------------------------------------------------------
 def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
-    """
-    Procesa PDFs cargados y genera Excel y Informe PDF en BytesIO.
-    *** CORRECCIÓN: La matrícula ahora busca 7 dígitos para incluir el dígito verificador ***
-    """
+    """Procesa PDFs cargados y genera Excel y Informe PDF en BytesIO."""
     excel_output = BytesIO()
-    writer = pd.ExcelWriter(excel_output, engine="openpyxl")
+    # Usaremos openpyxl para exportar con tipos de datos correctos
+    writer = pd.ExcelWriter(excel_output, engine="openpyxl") 
 
     resumen = {}
     t_inicio = time.time()
     
-    # PATRÓN CORREGIDO: Busca 4 letras seguidas de 7 dígitos (código de serie + dígito verificador)
-    CONTAINER_PATTERN = r"([A-Z]{4}\d{7})" 
+    # Patrón de expresión regular para matrículas de contenedor (4 letras + 6 o 7 dígitos)
+    CONTAINER_PATTERN = r"([A-Z]{4}\d{7})" # Corrección de matrícula (7 dígitos)
 
     for pdf_file_obj in uploaded_files:
         pdf_file_obj.seek(0) # Aseguramos que el puntero está al inicio antes de leer
         pdf_filename = pdf_file_obj.name
         
         # Contenedor desde nombre de archivo
-        m_cont = re.search(CONTAINER_PATTERN, pdf_filename) # USAMOS EL PATRÓN CORREGIDO
-        cont = m_cont.group(1) if m_cont else "SINCONT" # cont ahora capturará 7 dígitos
+        m_cont = re.search(CONTAINER_PATTERN, pdf_filename) 
+        cont = m_cont.group(1) if m_cont else "SINCONT"
 
         text = extract_text(pdf_file_obj)
-        rows_raw = parse_t2l(text)
+        rows_raw = parse_t2l(text) # Los Kilos ahora vienen como string con PUNTO
 
         final_rows = []
         sec = 1
@@ -191,12 +192,12 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
             final_rows.append({
                 "Bultos": b,
                 "Kilos": k,
-                "Fijo_col3": 1,
+                "Fijo_col3": "1", # Mantener como string si es fijo
                 "Fijo_col4": "RECEPCION T2L",
                 "Vacio5": "",
                 "Vacio6": "",
                 "Fijo_col7": "3401110000",
-                "Fijo_col8": 1,
+                "Fijo_col8": "1", # Mantener como string si es fijo
                 "Contenedor": cont,
                 "Fijo_col10": "ES",
                 "Vacio11": "",
@@ -217,25 +218,36 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
 
             # Sumatorios
             try:
-                total_bultos = sum(int(b or "0") for b, _ in rows_raw)
+                # El total de bultos es int
+                total_bultos = sum(int(b or "0") for b, _ in rows_raw) 
             except:
                 total_bultos = ""
 
             try:
+                # El total de kilos es float
                 total_kilos_val = sum(
-                    float((k or "0").replace(",", "."))
+                    float((k or "0")) # k ya usa punto, no requiere replace(",", ".")
                     for _, k in rows_raw
                 )
+                # Formateamos el string final para la fila TOTAL de Excel (Usando el punto)
                 if total_kilos_val.is_integer():
-                    total_kilos = str(int(total_kilos_val)).replace(".", ",")
+                    total_kilos = str(int(total_kilos_val))
                 else:
-                    total_kilos = str(total_kilos_val).replace(".", ",")
+                    total_kilos = str(total_kilos_val)
             except:
                 total_kilos = ""
 
+            # Insertar fila TOTAL en el Excel
             df.loc[len(df)] = [
                 total_bultos, total_kilos, "", "TOTAL", "", "", "", "", "", "", "", "", ""
             ]
+            # Se convierte la columna de kilos a tipo numérico FLOAT, ignorando errores (NaN)
+            # Esto obliga a Excel a reconocer la columna como 'Número'
+            df["Kilos"] = pd.to_numeric(df["Kilos"], errors='coerce') 
+            
+            # Se convierte la columna de Bultos y Orden a INT (si quieres que no tenga decimales)
+            df["Bultos"] = pd.to_numeric(df["Bultos"], errors='coerce').astype('Int64')
+            df["Orden"] = pd.to_numeric(df["Orden"], errors='coerce').astype('Int64')
 
             resumen[cont] = len(rows_raw)
 
@@ -243,13 +255,12 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
 
     writer.close()
     excel_output.seek(0)
-    excel_bytes = output.read()
+    excel_bytes = excel_output.read()
 
     t_total = time.time() - t_inicio
 
     # Generar Informe PDF en buffer
     pdf_buffer = BytesIO()
-    # Usamos la ruta del logo para el informe PDF
     generar_informe_pdf(resumen, pdf_buffer, t_total, logo_path="imagen.png") 
     pdf_buffer.seek(0)
     informe_pdf_bytes = pdf_buffer.read()
@@ -257,7 +268,7 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
     return excel_bytes, informe_pdf_bytes, t_total
 
 # ---------------------------------------------------------
-# GENERAR TXT INDIVIDUALES (LÓGICA ORIGINAL)
+# GENERAR TXT INDIVIDUALES (LÓGICA ACTUAL)
 # ---------------------------------------------------------
 def generar_txt_en_memoria(uploaded_excel_file):
     """Lee el Excel revisado (en memoria) y genera un diccionario de archivos TXT."""
@@ -284,7 +295,8 @@ def generar_txt_en_memoria(uploaded_excel_file):
                 df[col] = df[col].map(clean_int_str)
 
         if "Kilos" in df.columns:
-            df["Kilos"] = df["Kilos"].map(clean_kilos_str)
+            # Esta línea asegura que los Kilos salen con COMA para el TXT (formato español)
+            df["Kilos"] = df["Kilos"].map(clean_kilos_str) 
 
         # Generar el contenido TXT (separado por punto y coma, sin encabezado)
         txt_buffer = BytesIO()
