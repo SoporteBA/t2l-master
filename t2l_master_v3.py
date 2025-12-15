@@ -59,8 +59,7 @@ def parse_t2l(text):
                             try:
                                 f = float(v)
                                 # MODIFICACIÓN CLAVE: Almacenamos KILOS como STRING con PUNTO 
-                                # (separador estándar para float en Python/Pandas) para facilitar la tipificación a float en Excel.
-                                # Luego el formateo a coma se hará en el TXT o limpieza, no aquí.
+                                # para facilitar la tipificación a float en Excel.
                                 kilos = str(f)
                             except:
                                 kilos = ""
@@ -123,7 +122,7 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
     c.save()
 
 # ---------------------------------------------------------
-# LIMPIEZA PARA CSV/TXT (Lógica original)
+# LIMPIEZA PARA CSV (Lógica original)
 # ---------------------------------------------------------
 def clean_int_str(x):
     """Limpia valores numéricos para exportación como enteros."""
@@ -143,11 +142,10 @@ def clean_kilos_str(x):
     s = str(x).strip()
     if s == "":
         return ""
-    # Esta función ahora solo formatea el STRING para el TXT/CSV, 
-    # asumiendo que el DF interno usa el PUNTO.
-    s = s.replace(" ", "").replace(",", ".") # Asegurar que es float-compatible
+    # Esta función ahora espera el punto y lo convierte a coma para el formato TXT
+    s = s.replace(" ", "")
     try:
-        v = float(s)
+        v = float(s) # Debería ser float porque en el DF usamos punto
         if v.is_integer():
             return str(int(v))
         else:
@@ -161,25 +159,24 @@ def clean_kilos_str(x):
 # =========================================================
 
 # ---------------------------------------------------------
-# PROCESAR ARCHIVOS T2L Y GENERAR EXCEL/PDF (MODIFICADA: Tipificación)
+# PROCESAR ARCHIVOS T2L Y GENERAR EXCEL/PDF (ADAPTADA)
 # ---------------------------------------------------------
 def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
     """Procesa PDFs cargados y genera Excel y Informe PDF en BytesIO."""
     excel_output = BytesIO()
-    # Usaremos openpyxl para exportar con tipos de datos correctos
-    writer = pd.ExcelWriter(excel_output, engine="openpyxl") 
+    writer = pd.ExcelWriter(excel_output, engine="openpyxl")
 
     resumen = {}
     t_inicio = time.time()
     
-    # Patrón de expresión regular para matrículas de contenedor (4 letras + 6 o 7 dígitos)
-    CONTAINER_PATTERN = r"([A-Z]{4}\d{7})" # Corrección de matrícula (7 dígitos)
+    # Patrón de expresión regular para matrículas de contenedor (4 letras + 7 dígitos)
+    CONTAINER_PATTERN = r"([A-Z]{4}\d{7})" 
 
     for pdf_file_obj in uploaded_files:
         pdf_file_obj.seek(0) # Aseguramos que el puntero está al inicio antes de leer
         pdf_filename = pdf_file_obj.name
         
-        # Contenedor desde nombre de archivo
+        # Contenedor desde nombre de archivo (Buscando 7 dígitos)
         m_cont = re.search(CONTAINER_PATTERN, pdf_filename) 
         cont = m_cont.group(1) if m_cont else "SINCONT"
 
@@ -192,12 +189,12 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
             final_rows.append({
                 "Bultos": b,
                 "Kilos": k,
-                "Fijo_col3": "1", # Mantener como string si es fijo
+                "Fijo_col3": "1",
                 "Fijo_col4": "RECEPCION T2L",
                 "Vacio5": "",
                 "Vacio6": "",
                 "Fijo_col7": "3401110000",
-                "Fijo_col8": "1", # Mantener como string si es fijo
+                "Fijo_col8": "1",
                 "Contenedor": cont,
                 "Fijo_col10": "ES",
                 "Vacio11": "",
@@ -218,18 +215,15 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
 
             # Sumatorios
             try:
-                # El total de bultos es int
-                total_bultos = sum(int(b or "0") for b, _ in rows_raw) 
+                total_bultos = sum(int(b or "0") for b, _ in rows_raw)
             except:
                 total_bultos = ""
 
             try:
-                # El total de kilos es float
                 total_kilos_val = sum(
-                    float((k or "0")) # k ya usa punto, no requiere replace(",", ".")
+                    float((k or "0")) 
                     for _, k in rows_raw
                 )
-                # Formateamos el string final para la fila TOTAL de Excel (Usando el punto)
                 if total_kilos_val.is_integer():
                     total_kilos = str(int(total_kilos_val))
                 else:
@@ -237,17 +231,15 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
             except:
                 total_kilos = ""
 
+            # Forzamos tipos de datos para Excel
+            df["Kilos"] = pd.to_numeric(df["Kilos"], errors='coerce') 
+            df["Bultos"] = pd.to_numeric(df["Bultos"], errors='coerce').astype('Int64')
+            df["Orden"] = pd.to_numeric(df["Orden"], errors='coerce').astype('Int64')
+            
             # Insertar fila TOTAL en el Excel
             df.loc[len(df)] = [
                 total_bultos, total_kilos, "", "TOTAL", "", "", "", "", "", "", "", "", ""
             ]
-            # Se convierte la columna de kilos a tipo numérico FLOAT, ignorando errores (NaN)
-            # Esto obliga a Excel a reconocer la columna como 'Número'
-            df["Kilos"] = pd.to_numeric(df["Kilos"], errors='coerce') 
-            
-            # Se convierte la columna de Bultos y Orden a INT (si quieres que no tenga decimales)
-            df["Bultos"] = pd.to_numeric(df["Bultos"], errors='coerce').astype('Int64')
-            df["Orden"] = pd.to_numeric(df["Orden"], errors='coerce').astype('Int64')
 
             resumen[cont] = len(rows_raw)
 
@@ -255,7 +247,7 @@ def procesar_t2l_streamlit(uploaded_files, sumaria, logo_path=None):
 
     writer.close()
     excel_output.seek(0)
-    excel_bytes = excel_output.read()
+    excel_bytes = excel_output.read() # Corregido: usar excel_output.read()
 
     t_total = time.time() - t_inicio
 
@@ -307,6 +299,22 @@ def generar_txt_en_memoria(uploaded_excel_file):
         txt_files[sheet] = txt_buffer.read()
         
     return txt_files
+
+# ---------------------------------------------------------
+# NUEVA FUNCIÓN: GENERAR ZIP DESDE EL DICCIONARIO TXT
+# ---------------------------------------------------------
+def generar_zip_desde_txt(txt_files):
+    """Toma el diccionario de contenidos TXT y los comprime en un único archivo ZIP."""
+    zip_buffer = BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for filename, content in txt_files.items():
+            # El nombre de archivo en el ZIP será la clave del diccionario + extensión .txt
+            zf.writestr(f"{filename}.txt", content)
+            
+    zip_buffer.seek(0)
+    return zip_buffer, len(txt_files)
+
 
 # =========================================================
 # INTERFAZ DE STREAMLIT (ADAPTADA ESTÉTICAMENTE A DUA)
@@ -456,12 +464,30 @@ h1, h2, h3, h4 { color: #004C91; }
                         st.error("No se pudieron generar archivos TXT. Verifica el formato del Excel revisado.")
 
         
-    # --- 4. Descargar Resultados Finales Individuales (Paso Final) ---
+    # --- 4. Descargar Resultados Finales (Individual y Masivo) ---
     if 'txt_files' in st.session_state and st.session_state.txt_files:
         st.markdown("---")
-        st.subheader("4. Descargar Archivos TXT Individuales")
+        st.subheader("4. Descargar Archivos TXT")
         
-        # Creamos columnas para organizar los botones de descarga
+        # Generar ZIP para descarga masiva
+        zip_buffer, zip_count = generar_zip_desde_txt(st.session_state.txt_files)
+        
+        col_masivo, col_vacio = st.columns([1, 2])
+        
+        with col_masivo:
+            st.download_button(
+                label=f"⬇️ Descargar TODOS los {zip_count} TXT (Archivo ZIP)",
+                data=zip_buffer,
+                file_name="Archivos_T2L_TXT.zip",
+                mime="application/zip",
+                help="Descarga todos los TXT en un único archivo ZIP.",
+                type="primary",
+                key="dl_zip_final"
+            )
+        
+        st.markdown("**Descarga Individual:**")
+        
+        # Creamos columnas para organizar los botones de descarga individual
         cols = st.columns(3)
         i = 0
         
@@ -470,17 +496,17 @@ h1, h2, h3, h4 { color: #004C91; }
             with cols[i % 3]: # Rota entre 3 columnas
                 # Botón de descarga limpio
                 st.download_button(
-                    label=f"⬇️ Descargar {name}.txt", 
+                    label=f"⬇️ {name}.txt", 
                     data=txt_bytes,
                     file_name=f"{name}.txt",
                     mime="text/plain",
                     help=f"Contiene las partidas para el contenedor {name}.",
-                    type="primary",
+                    type="secondary", # Usamos secondary para diferenciar del botón masivo
                     key=f"dl_txt_{name}" # Clave única para cada botón
                 )
             i += 1
 
-        st.info(f"Proceso terminado. Se generaron {st.session_state.txt_count} archivos TXT. Puedes empezar un nuevo proceso recargando la página o cambiando los inputs.")
+        st.info(f"Proceso terminado. Se generaron {st.session_state.txt_count} archivos TXT. Puede empezar un nuevo proceso recargando la página o cambiando los inputs.")
 
 if __name__ == "__main__":
     main_streamlit_app()
