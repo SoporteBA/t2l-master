@@ -94,7 +94,7 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
     y -= 25
 
     c.setFont("Helvetica", 10)
-    c.drawString(40, y, f"ñ Tiempo total de procesamiento: {tiempo_total:.2f} segundos")
+    c.drawString(40, y, f"Tiempo total de procesamiento: {tiempo_total:.2f} segundos")
     y -= 20
     c.drawString(40, y, "© Departamento de Procesos | Bernardino Abad   Edition 2025")
     y -= 30
@@ -105,7 +105,7 @@ def generar_informe_pdf(resumen, pdf_buffer, tiempo_total, logo_path=None):
 
     c.setFont("Helvetica", 11)
     for cont, total in resumen.items():
-        c.drawString(40, y, f"ñ {cont}   Total partidas: {total}") 
+        c.drawString(40, y, f" {cont}   Total partidas: {total}") 
         y -= 18
         if y < 80:
             c.showPage()
@@ -401,7 +401,7 @@ h1, h2, h3, h4 { color: #004C91; }
         st.session_state.t_total = None
         st.session_state.txt_files = None
 
-        with st.spinner('ñ Procesando T2L, por favor espera...'):
+        with st.spinner('Procesando T2L, por favor espera...'):
             excel_bytes, informe_pdf_bytes, t_total = procesar_t2l_streamlit(
                 uploaded_files, sumaria, "imagen.png" # Pasamos la ruta del logo para el informe PDF
             )
@@ -452,7 +452,7 @@ h1, h2, h3, h4 { color: #004C91; }
         
         if revised_excel:
             if st.button("🎉 Generar Archivos TXT", type="secondary", use_container_width=True):
-                with st.spinner('ñ Generando ficheros TXT...'):
+                with st.spinner('Generando ficheros TXT...'):
                     
                     txt_files = generar_txt_en_memoria(revised_excel)
                     
@@ -510,3 +510,4 @@ h1, h2, h3, h4 { color: #004C91; }
 
 if __name__ == "__main__":
     main_streamlit_app()
+
